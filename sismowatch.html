@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SeisMotion | Mapa en Vivo [BETA] 1.0</title>
+  <link rel="icon" type="image/png" href="https://imgur.com/OkpM9B6.png">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #map {
+      flex: 1;
+    }
+
+    #sidebar {
+      width: 20%;
+      color: #ffff;
+      min-width: 150px;
+      background-color: #2a2a2a;
+      padding: 10px;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+      height: 100%;
+      overflow-y: auto;
+    }
+
+    #sismo-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background-color: #2a2a2a; /* Cambia el color de fondo de la tabla */
+    }
+
+    .sismo-item {
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .line {
+      border-top: 1px solid #ddd;
+      margin-bottom: 10px;
+    }
+
+    #sidebar h2 {
+      position: sticky;
+      top: 0;
+      background-color: #1a1a1a; /* Cambia el color de fondo del encabezado */
+      z-index: 1;
+      padding: 10px;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="sidebar">
+    <h2>Últimos Sismos</h2>
+    <ul id="sismo-list"></ul>
+  </div>
+
+  <script>
+    // Mostrar mensaje de aviso al cargar la página
+    alert('SeisMotion | Mapa en Vivo\n\nEste es un mapa en vivo que muestra los últimos sismos registrados. Ten en cuenta que esta versión es una beta y puede contener errores.\n\nVersión: 1.0 [BETA]');
+
+    mapboxgl.accessToken = 'pk.eyJ1IjoiYWx6b2FsZXJ0YXNpc21pY2EiLCJhIjoiY2wyNHM2c25vMjNoejNpcWRrb3Y4MzV6ciJ9.D2pXLxF0emuIHvrW-n181Q';
+
+    navigator.geolocation.getCurrentPosition(success, error);
+
+    function success(position) {
+      const longitude = position.coords.longitude;
+      const latitude = position.coords.latitude;
+
+      const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: [-75.02414667197782, -9.563874595403979],
+        zoom: 5
+      });
+
+      const el = document.createElement('div');
+      el.style.width = '50px';
+      el.style.height = '50px';
+      el.style.borderRadius = '50%';
+      el.style.background = 'url("https://cdn3.iconfinder.com/data/icons/map-14/144/Map-10-512.png") no-repeat center center';
+      el.style.backgroundSize = 'cover';
+
+      new mapboxgl.Marker(el)
+        .setLngLat([longitude, latitude])
+        .addTo(map);
+
+      map.on('load', function () {
+        map.addSource('plates', {
+          type: 'geojson',
+          data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
+        });
+
+        map.addLayer({
+          id: 'plates-layer',
+          type: 'line',
+          source: 'plates',
+          paint: {
+            'line-color': '#FF9F33',
+            'line-width': 4
+          }
+        });
+      });
+
+      map.on('load', () => {
+        fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson')
+          .then(response => response.json())
+          .then(data => {
+              // Ordenar los sismos por tiempo de manera descendente (los más recientes primero)
+          data.features.sort((a, b) => new Date(b.properties.time) - new Date(a.properties.time));
+
+
+            map.addSource('earthquakes', {
+              type: 'geojson',
+              data: data
+            });
+
+            map.addLayer({
+              'id': 'earthquakes-layer',
+              'type': 'circle',
+              'source': 'earthquakes',
+              'paint': {
+                "circle-opacity": 0.5,
+                'circle-radius': {
+                  'property': 'mag',
+                  'stops': [
+                    [4, 9],
+                    [5, 15],
+                    [6, 25],
+                    [7, 45],
+                    [8, 40],
+                    [9, 70],
+                    [10, 70],
+                  ]
+                },
+                'circle-color': {
+                  'property': 'mag',
+                  'stops': [
+                    [4, '#22BF57'],
+                    [5, '#FCA217'],
+                    [6, '#FC6D17'],
+                    [7, '#F02B00'],
+                    [8, '#BC2DFA'],
+                    [9, '#BC2DFA'],
+                    [10, '#BC2DFA'],
+                  ]
+                },
+              }
+            });
+
+            const sismoList = document.getElementById('sismo-list');
+            data.features.forEach(sismo => {
+              const item = document.createElement('li');
+              item.classList.add('sismo-item');
+              const date = new Date(sismo.properties.time);
+              const formattedDate = date.toLocaleDateString();
+              const formattedTime = date.toLocaleTimeString();
+              const magnitude = sismo.properties.mag.toFixed(1);
+              const depth = sismo.geometry.coordinates[2].toFixed(0); // Profundidad
+
+              // Determinar el color del texto
+              let textColor = '#5AB8A6'; // Color verde claro por defecto
+              if (magnitude >= 4.0 && magnitude < 4.7) {
+                textColor = '#37C2FF'; // Azul claro
+              } else if (magnitude >= 4.7 && magnitude < 5.9) {
+                textColor = '#FFA500'; // Naranja
+              } else if (magnitude >= 5.9 && magnitude < 7.5) {
+                textColor = '#FF0000'; // Rojo
+              } else if (magnitude >= 7.5 && magnitude <= 10.0) {
+                textColor = '#800080'; // Morado
+              }
+
+              item.innerHTML = `
+                ${sismo.properties.place}<br>
+                ${formattedTime} || ${formattedDate} || Profundidad: ${depth} km<br>
+                <strong style="color:${textColor}">${magnitude}</strong>
+              `;
+
+              // Agregar la línea horizontal
+              const line = document.createElement('div');
+              line.classList.add('line');
+
+              // Agregar manejador de eventos al hacer clic en un sismo
+              item.addEventListener('click', () => {
+                map.flyTo({
+                  center: [sismo.geometry.coordinates[0], sismo.geometry.coordinates[1]],
+                  essential: true
+                });
+              });
+
+              sismoList.appendChild(item);
+              sismoList.appendChild(line);
+            });
+          })
+          .catch(error => {
+            console.error('Error al obtener datos de sismos:', error);
+          });
+      });
+    }
+
+    function error() {
+      alert('No se pudo obtener la ubicación');
+    }
+  </script>
+</body>
+</html>
