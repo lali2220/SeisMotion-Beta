@@ -68,6 +68,16 @@
   </div>
 
   <script>
+    document.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && (e.which == 85 || e.which == 67 || e.which == 88)) {
+        e.preventDefault();
+      }
+    });
+
     // Mostrar mensaje de aviso al cargar la página
     alert('SeisMotion | Mapa en Vivo\n\nEste es un mapa en vivo que muestra los últimos sismos registrados. Ten en cuenta que esta versión es una beta y puede contener errores.\n\nVersión: 1.0 [BETA]');
 
@@ -192,11 +202,11 @@
               const line = document.createElement('div');
               line.classList.add('line');
 
-              // Agregar manejador de eventos al hacer clic en un sismo
               item.addEventListener('click', () => {
                 map.flyTo({
                   center: [sismo.geometry.coordinates[0], sismo.geometry.coordinates[1]],
-                  essential: true
+                  essential: true,
+                  zoom: 8 
                 });
               });
 
